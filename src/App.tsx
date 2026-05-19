@@ -1,6 +1,18 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import styled, { createGlobalStyle, keyframes } from "styled-components";
-import { Select, Button, Avatar, ConfigProvider } from "antd";
+import {
+  Select,
+  Button,
+  Avatar,
+  ConfigProvider,
+  Modal,
+  Divider,
+  Form,
+  Steps,
+  Input,
+  notification,
+  Checkbox,
+} from "antd";
 import {
   EnvironmentOutlined,
   SearchOutlined,
@@ -14,6 +26,8 @@ import {
   BookOutlined,
 } from "@ant-design/icons";
 import start from "./assets/start.png";
+import { stepSchemas } from "./schema";
+import moment from "moment";
 
 const { Option } = Select;
 
@@ -33,6 +47,87 @@ const C = {
   orangeTint: "#FFF3EB",
   redTint: "#FFF0F3",
   navyTint: "#EEF3F8",
+};
+
+const maskCep = (value: string) => {
+  return value
+    ?.replace(/\D/g, "")
+    .slice(0, 8)
+    .replace(/^(\d{5})(\d)/, "$1-$2");
+};
+
+const maskCpf = (value: string) => {
+  return value
+    ?.replace(/\D/g, "")
+    .slice(0, 11)
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
+export const parseCurrencyBRL = (value?: string): number => {
+  if (!value) return 0;
+
+  const numeric = value
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^\d.]/g, "");
+
+  return Number(numeric);
+};
+
+export const maskCurrencyBRL = (value: string) => {
+  const numbers = value.replace(/\D/g, "");
+
+  if (!numbers) return "";
+
+  const amount = Number(numbers) / 100;
+
+  return amount.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const sexoOptions = [
+  { label: "Masculino", value: "MASCULINO" },
+  { label: "Feminino", value: "FEMININO" },
+  { label: "Outro", value: "OUTRO" },
+  { label: "Prefiro não informar", value: "NAO_INFORMAR" },
+];
+
+const estadoCivilOptions = [
+  { label: "Solteiro(a)", value: "SOLTEIRO" },
+  { label: "Casado(a)", value: "CASADO" },
+  { label: "Divorciado(a)", value: "DIVORCIADO" },
+  { label: "Separado(a)", value: "SEPARADO" },
+  { label: "Viúvo(a)", value: "VIUVO" },
+  { label: "União Estável", value: "UNIAO_ESTAVEL" },
+];
+
+export const formatBirthDate = (value: string): string => {
+  if (!value) return "";
+  const original = value.trim();
+  const digits = original.replace(/\D/g, "").slice(0, 8);
+  const looksLikeIso = /^\d{4}-\d{2}-\d{2}$/.test(original);
+  const firstFour = digits.slice(0, 4);
+  const firstFourNum = firstFour ? Number(firstFour) : NaN;
+  const plausibleYear =
+    !Number.isNaN(firstFourNum) && firstFourNum >= 1900 && firstFourNum <= 2100;
+
+  if (looksLikeIso || (digits.length === 8 && plausibleYear)) {
+    const y = digits.slice(0, 4);
+    const m = digits.slice(4, 6);
+    const d = digits.slice(6, 8);
+
+    if (d.length === 2) return `${d}/${m}/${y}`;
+    if (m.length === 2) return `${m}/${y}`;
+    return y;
+  }
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 };
 
 function formatDate(iso: any) {
@@ -171,6 +266,109 @@ const Hero = styled.section`
     left: -60px;
     pointer-events: none;
   }
+`;
+
+const GridCriterios = styled.div`
+  /* padding: 25px 20px; */
+  padding-bottom: 0px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  @media (max-width: 1600px) {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  @media (max-width: 1300px) {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  @media (max-width: 1000px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    margin-top: 0px;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(1, 1fr);
+    margin-top: 0px;
+  }
+  grid-column-gap: 30px;
+  grid-row-gap: 30px;
+  justify-items: stretch;
+  align-items: stretch;
+`;
+
+const LabelSub = styled.span`
+  font-family: Inter;
+  font-weight: 200;
+  font-size: 1.1rem;
+  color: #5d5d5d;
+`;
+
+const GridAddress = styled.div`
+  /* padding: 25px 20px; */
+  padding-bottom: 0px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  @media (max-width: 1600px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1300px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1000px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    margin-top: 0px;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(1, 1fr);
+    margin-top: 0px;
+  }
+  grid-column-gap: 30px;
+  grid-row-gap: 30px;
+  justify-items: stretch;
+  align-items: stretch;
+`;
+
+const GridFamilyData = styled.div`
+  /* padding: 25px 20px; */
+  padding-bottom: 0px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  @media (max-width: 1600px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1300px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1000px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    margin-top: 0px;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(1, 1fr);
+    margin-top: 0px;
+  }
+  grid-column-gap: 30px;
+  grid-row-gap: 30px;
+  justify-items: stretch;
+  align-items: stretch;
 `;
 
 const AccentBar = styled.div`
@@ -551,6 +749,73 @@ const ReservaCard = styled(Card)`
   }
 `;
 
+const WrapperSteps = styled.div`
+  box-shadow: rgba(14, 63, 126, 0.06) 0px 0px 0px 1px,
+    rgba(42, 51, 70, 0.03) 0px 1px 1px -0.5px,
+    rgba(42, 51, 70, 0.04) 0px 2px 2px -1px,
+    rgba(42, 51, 70, 0.04) 0px 3px 3px -1.5px,
+    rgba(42, 51, 70, 0.03) 0px 5px 5px -2.5px,
+    rgba(42, 51, 70, 0.03) 0px 10px 10px -5px,
+    rgba(42, 51, 70, 0.03) 0px 24px 24px -8px;
+  background-color: white;
+  border-radius: 20px;
+  padding: 20px;
+  width: 100%;
+`;
+
+const NavPill = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: rgba(80, 53, 17, 0.06);
+  border: 1px solid rgba(17, 51, 80, 0.1);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${C.navy};
+  animation: ${fadeUp} 0.6s 0.1s ease both;
+  svg {
+    font-size: 13px;
+  }
+  @media (max-width: 420px) {
+    display: flex;
+    width: 100%;
+  }
+`;
+
+const GridPersonalData = styled.div`
+  /* padding: 25px 20px; */
+  padding-bottom: 0px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  @media (max-width: 1600px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1300px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 1000px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+    margin-top: 0px;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(1, 1fr);
+    margin-top: 0px;
+  }
+  grid-column-gap: 30px;
+  grid-row-gap: 30px;
+  justify-items: stretch;
+  align-items: stretch;
+`;
+
 const antTheme = {
   token: {
     colorPrimary: C.navy,
@@ -725,6 +990,7 @@ function CotaSection({ cotaKey, data, blockDelay }: any) {
 export default function App() {
   const [local, setLocal] = useState<any>(null);
   const [empreendimentos, setEmpreendimentos] = useState<any>(null);
+  const [municipios, setMunicipios] = useState<any>(null);
   const [loading, setLoading] = useState<any>(false);
   const [sorteio, setSorteio] = useState<any>(null);
   const [vagas, setVagas] = useState<any>(null);
@@ -748,6 +1014,26 @@ export default function App() {
     }
 
     fetchEmpreendimentos();
+  }, []);
+
+  useEffect(() => {
+    async function fetchMunicipios() {
+      try {
+        const response = await fetch(
+          "https://sga.startconsultorianet.com/public/municipios"
+        );
+
+        if (!response.ok) {
+          throw new Error("Erro ao buscar dados");
+        }
+
+        const dados = await response.json();
+
+        setMunicipios(dados);
+      } catch (error) {}
+    }
+
+    fetchMunicipios();
   }, []);
 
   async function enviarDados() {
@@ -781,6 +1067,657 @@ export default function App() {
     0
   );
 
+  const [registerModal, setOpenRegisterModal] = useState<boolean>(false);
+  const [form] = Form.useForm();
+  const [current, setCurrent] = useState(0);
+  const [formData, setFormData] = useState<any>({});
+
+  useEffect(() => {
+    form.setFieldsValue(formData);
+  }, [current]);
+
+  const next = async () => {
+    try {
+      const schema = stepSchemas[current];
+      const fields = Object.keys(schema.fields);
+      const values = form.getFieldsValue(fields);
+
+      await schema.validate(values, { abortEarly: false });
+
+      setFormData((prev: any) => ({ ...prev, ...values }));
+      setCurrent((prev) => prev + 1);
+    } catch (err: any) {
+      if (err.inner) {
+        form.setFields(
+          err.inner.map((e: any) => ({
+            name: e.path,
+            errors: [e.message],
+          }))
+        );
+      }
+    }
+  };
+
+  const prev = async () => {
+    const values = form.getFieldsValue();
+    setFormData({ ...formData, ...values });
+    setCurrent(current - 1);
+  };
+
+  const [loadingCep, setLoadingCep] = useState(false);
+  const numeroRef: any = useRef(null);
+  const debounceRef: any = useRef(null);
+
+  const handleCepLookup = async (cep: any) => {
+    const cleanCep = cep?.replace(/\D/g, "");
+
+    if (cleanCep.length !== 8) return;
+
+    setLoadingCep(true);
+
+    try {
+      const response = await fetch(
+        `https://viacep.com.br/ws/${cleanCep}/json/`
+      );
+      const data = await response.json();
+
+      if (data.erro) {
+        notification.error({
+          message: "Endereço não encontrado",
+          description: "Endereço não encontrado insira manualmente",
+        });
+        return;
+      }
+
+      form.setFieldsValue({
+        logradouro: data.logradouro || undefined,
+        bairro: data.bairro || undefined,
+        cidade: data.localidade || undefined,
+        estado: data.uf || undefined,
+        complemento: data.complemento || undefined,
+      });
+
+      setTimeout(() => {
+        numeroRef.current?.focus();
+      }, 100);
+    } catch {
+      notification.error({
+        message: "Erro ao buscar CEP",
+        description: "Endereço não encontrado insira manualmente",
+      });
+    } finally {
+      setLoadingCep(false);
+    }
+  };
+
+  const handleCepChange = (e: any) => {
+    const masked = maskCep(e.target.value);
+    form.setFieldValue("cep", masked);
+
+    clearAddressFields();
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef!.current = setTimeout(() => {
+      handleCepLookup(masked);
+    }, 600);
+  };
+
+  const handleCpfChange = (e: any) => {
+    const masked = maskCpf(e.target.value);
+    form.setFieldValue("cpf", masked);
+  };
+
+  const handleCpfConjugeChange = (e: any) => {
+    const masked = maskCpf(e.target.value);
+    form.setFieldValue("cpfConjuge", masked);
+  };
+
+  const clearAddressFields = () => {
+    form.setFieldsValue({
+      logradouro: undefined,
+      bairro: undefined,
+      cidade: undefined,
+      estado: undefined,
+      complemento: undefined,
+    });
+  };
+
+  const steps = [
+    {
+      title: "Dados Pessoais",
+      content: (
+        <>
+          {/* DADOS PESSOAIS */}
+          <Divider style={{ margin: "20px 0px" }}>Dados Pessoais</Divider>
+          <GridPersonalData>
+            <Form.Item
+              name="idMunicipio"
+              label="Municipio de Cadastro"
+              required
+            >
+              <Select
+                size="large"
+                placeholder="Selecione"
+                options={municipios!?.map((item: any) => {
+                  return {
+                    label: item?.nome,
+                    value: item?.id,
+                  };
+                })}
+                allowClear
+              />
+            </Form.Item>
+
+            <Form.Item name="cpf" label="CPF" required>
+              <Input
+                onChange={handleCpfChange}
+                placeholder="000.000.000-00"
+                size="large"
+                maxLength={14}
+              />
+            </Form.Item>
+
+            <Form.Item name="nis" label="NIS" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="nome" label="Nome" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="rg" label="RG" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="orgao" label="Órgão" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="estado" label="Estado" required>
+              <Input
+                size="large"
+                onChange={(e) => {
+                  form.setFieldValue("estado", e.target.value);
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="dataNascimento"
+              label="Data de Nascimento"
+              required
+            >
+              <Input
+                size="large"
+                onChange={(e) => {
+                  form.setFieldsValue({
+                    dataNascimento: formatBirthDate(e.target.value),
+                  });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item name="estadoCivil" label="Estado Civil" required>
+              <Select
+                size="large"
+                placeholder="Selecione"
+                options={estadoCivilOptions}
+                allowClear
+              />
+            </Form.Item>
+
+            <Form.Item name="sexo" label="Sexo" required>
+              <Select
+                size="large"
+                placeholder="Selecione"
+                options={sexoOptions}
+                allowClear
+              />
+            </Form.Item>
+
+            <Form.Item name="email" label="E-mail" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="telefone1" label="Telefone 1" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="telefone2" label="Telefone 2">
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="mae" label="Nome da Mãe" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item name="rendaPessoal" label="Renda Pessoal" required>
+              <Input
+                size="large"
+                inputMode="numeric"
+                placeholder="0,00"
+                value={form.getFieldValue("rendaPessoal")}
+                onChange={(e) => {
+                  form.setFieldsValue({
+                    rendaPessoal: maskCurrencyBRL(e.target.value),
+                  });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item name="profissao" label="Profissão" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="emancipado"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Emancipado</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="chefeDeFamilia"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Chefe de Família</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="possuiDeficiencia"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Possui Deficiência</Checkbox>
+            </Form.Item>
+
+            <Form.Item name="deficiencia" label="Nome da deficiência">
+              <Input size="large" />
+            </Form.Item>
+          </GridPersonalData>
+
+          {/*FINAL DADOS PESSOAIS */}
+
+          {/*INCICIO SITUAÇÃO FAMILIAR */}
+          <Divider style={{ margin: "20px 0px" }}>Situação Familiar</Divider>
+          <GridFamilyData>
+            <Form.Item
+              name="totalPessoas"
+              label="Total pessoas"
+              required
+              getValueFromEvent={(e) =>
+                e.target.value ? Number(e.target.value) : false
+              }
+            >
+              <Input type="number" min={0} size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="rendaFamiliar"
+              label="Renda familiar"
+              required
+              // getValueFromEvent={(e) =>
+              //   e.target.value ? Number(e.target.value) : undefined
+              // }
+            >
+              <Input
+                size="large"
+                inputMode="numeric"
+                placeholder="0,00"
+                value={form.getFieldValue("rendaFamiliar")}
+                onChange={(e) => {
+                  form.setFieldsValue({
+                    rendaFamiliar: maskCurrencyBRL(e.target.value),
+                  });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item name="condicaoMoradia" label="Condição moradia" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="recebemBolsaFamilia"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Recebem bolsa família</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="deficientesNaFamilia"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Deficientes na família</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="idososNaFamilia"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Idosos na família</Checkbox>
+            </Form.Item>
+
+            <Form.Item name="tipoMoradia" label="Tipo moradia" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item
+              name="trabalhoOcupacao"
+              label="Trabalho ocupação"
+              required
+            >
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="filhos0a6Anos"
+              label="Filhos de 0 a 6 anos"
+              required
+              getValueFromEvent={(e) =>
+                e.target.value ? Number(e.target.value) : 0
+              }
+            >
+              <Input type="number" min={0} size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="filhos7a18Anos"
+              label="Filhos de 7 a 18 anos"
+              required
+              getValueFromEvent={(e) =>
+                e.target.value ? Number(e.target.value) : 0
+              }
+            >
+              <Input type="number" min={0} size="large" />
+            </Form.Item>
+          </GridFamilyData>
+          {/*FINAL SITUAÇÃO FAMILIAR */}
+
+          <Divider style={{ margin: "20px 0px" }}>Endereço</Divider>
+          {/* ...continuação endereço */}
+          <GridAddress>
+            <Form.Item name="cep" label="CEP" required>
+              <Input
+                placeholder="00000-000"
+                onChange={handleCepChange}
+                disabled={loadingCep}
+                size="large"
+              />
+            </Form.Item>
+            <Form.Item name="logradouro" label="Logradouro" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item name="numero" label="Nº imóvel" required>
+              <Input ref={numeroRef} size="large" />
+            </Form.Item>
+            <Form.Item name="bairro" label="Bairro" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item name="cidade" label="Cidade" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item name="complemento" label="Complemento" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item
+              name="localStatusInscricao" // nome municipio
+              label="Local do status inscrição"
+              required
+            >
+              <Input size="large" />
+            </Form.Item>
+          </GridAddress>
+        </>
+      ),
+    },
+    {
+      title: "Situação Conjuge",
+      content: (
+        <>
+          <Divider style={{ margin: "20px 0px" }}>Situação Conjuge</Divider>
+          <GridAddress>
+            <Form.Item name="cpfConjuge" label="CPF" required>
+              <Input
+                placeholder="000.000.000-00"
+                onChange={handleCpfConjugeChange}
+                size="large"
+                // disabled={loadingCep}
+              />
+            </Form.Item>
+            <Form.Item name="nomeConjuge" label="Nome cônjuge" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item name="estadoCivilConjuge" label="Estado civil" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item name="profissaoConjuge" label="Profissão" required>
+              <Input size="large" />
+            </Form.Item>
+            <Form.Item name="rgConjuge" label="RG" required>
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="rendaConjuge"
+              label="Renda"
+              required
+              getValueFromEvent={(e) =>
+                e.target.value ? Number(e.target.value) : 0
+              }
+            >
+              <Input
+                size="large"
+                inputMode="numeric"
+                placeholder="0,00"
+                value={form.getFieldValue("rendaConjuge")}
+                onChange={(e) => {
+                  form.setFieldsValue({
+                    rendaConjuge: maskCurrencyBRL(e.target.value),
+                  });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="possuiDeficienciaConjuge" // nome municipio
+              label="Cônjuge possui deficiencia"
+              required
+            >
+              <Input size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name="conjugeVaraoAusente" // nome municipio
+              label="Cônjuge varão ausente"
+              required
+            >
+              <Input size="large" />
+            </Form.Item>
+          </GridAddress>
+        </>
+      ),
+    },
+    {
+      title: "Critérios Priorização",
+      content: (
+        <>
+          <LabelSub style={{ fontWeight: "300" }}>
+            Critérios de Priorização
+          </LabelSub>
+          <Divider />
+          <GridCriterios>
+            <Form.Item
+              name="mulherResponsavelUnidadeFamiliar"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Mulher responsável pela unidade familiar</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="titularOuConjugeNegro"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Titular ou cônjuge negro</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="pessoaComDeficienciaNaComposicaoFamiliar"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Pessoa com deficiência na composição familiar</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="idosoNaComposicaoFamiliar"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Idosos na composição familiar</Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="criancaOuAdolescenteNaComposicaoFamiliar"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Criança ou adolescente na composição familiar</Checkbox>
+            </Form.Item>
+            <Form.Item
+              name="pessoaComCancerOuDoencaRaraCronicaDegenerativa"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>
+                Pessoa com cancer ou doença rara cronica degenerativa
+              </Checkbox>
+            </Form.Item>
+
+            <Form.Item
+              name="mulherVitimaViolenciaDomestica"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Mulher vítima de violência doméstica</Checkbox>
+            </Form.Item>
+            <Form.Item
+              name="situacaoRiscoVulnerabilidade"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Situação de risco e vulnerabilidade</Checkbox>
+            </Form.Item>
+            <Form.Item
+              name="povosTradicionaisQuilombolas"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Povos tradicionais e quilombolas</Checkbox>
+            </Form.Item>
+            <Form.Item
+              name="residentesEmAreasDeRisco"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>Residentes em área de risco</Checkbox>
+            </Form.Item>
+            <Form.Item
+              name="situacaoDeRuaOuTrajetoriaRua"
+              valuePropName="checked"
+              initialValue={false}
+            >
+              <Checkbox>
+                Encontra-se em situação de rua ou com trajetória
+              </Checkbox>
+            </Form.Item>
+          </GridCriterios>
+        </>
+      ),
+    },
+  ];
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      await stepSchemas[current].validate(values, { abortEarly: false });
+
+      const payload = {
+        ...formData,
+        ...values,
+        rendaPessoal: parseCurrencyBRL(formData!?.rendaPessoal),
+        rendaConjuge: parseCurrencyBRL(formData!?.rendaConjuge),
+        rendaFamiliar: parseCurrencyBRL(formData!?.rendaFamiliar),
+        cpf: formData!?.cpf!?.replace(/[^a-zA-Z0-9]/g, ""),
+        dataNascimento: moment(formData!?.dataNascimento, "DD/MM/YYYY").format(
+          "YYYY-MM-DD"
+        ),
+        idMunicipio: formData!?.idMunicipio,
+        uf: formData!?.estado,
+      };
+
+      try {
+        const res = await fetch(
+          "https://sga.startconsultorianet.com/public/beneficiarios",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer TOKEN_EXEMPLO",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!res.ok) {
+          throw new Error("Erro ao enviar dados");
+        }
+
+        if (res.status === 200 || res.status === 201) {
+          form.resetFields();
+          setFormData({});
+          setCurrent(0);
+          notification.success({
+            duration: 3,
+            message: "Sucesso!",
+            description: `Beneficiario cadastrado.`,
+          });
+        }
+      } catch (error: any) {
+        notification.error({
+          duration: 1,
+          message: "Erro!",
+          description: `${error}`,
+        });
+      }
+    } catch (err: any) {
+      if (err.inner) {
+        const errors: any = {};
+        err.inner.forEach((e: any) => {
+          errors[e.path] = {
+            value: form.getFieldValue(e.path),
+            errors: [new Error(e.message)],
+          };
+        });
+        form.setFields(
+          Object.keys(errors).map((field) => ({
+            name: field,
+            errors: errors[field].errors,
+          }))
+        );
+      }
+    }
+  };
+
   return (
     <ConfigProvider theme={antTheme}>
       <GlobalStyle />
@@ -791,6 +1728,32 @@ export default function App() {
             <Logo>
               <StartLogo src={start} />
             </Logo>
+
+            <NavPill>
+              <Button
+                style={{
+                  flex: 1,
+                  background: C.white,
+                  borderColor: C.border,
+                  maxHeight: "40px",
+                  color: "black",
+                }}
+              >
+                Atualizar cadastro
+              </Button>
+              <Button
+                style={{
+                  flex: 1,
+                  background: C.orange,
+                  borderColor: C.white,
+                  maxHeight: "40px",
+                  color: "white",
+                }}
+                onClick={() => setOpenRegisterModal(true)}
+              >
+                Cadastrar-me
+              </Button>
+            </NavPill>
           </Navbar>
           <HeroContent>
             <HeroTitle>
@@ -807,10 +1770,51 @@ export default function App() {
 
         <FilterWrap>
           <FilterCard>
-            <FilterHead>
-              <SearchOutlined />
-              <span>Filtrar hierarquizações realizados</span>
-            </FilterHead>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "start",
+                flexDirection: "row",
+              }}
+            >
+              <FilterHead>
+                <SearchOutlined />
+                <span>Filtrar hierarquizações realizados</span>
+              </FilterHead>
+              <div
+                style={{
+                  marginLeft: "auto",
+                  gap: "10px",
+                  display: "flex",
+                  paddingRight: "13px",
+                }}
+              >
+                {/* <Button
+                  style={{
+                    flex: 1,
+                    background: C.white,
+                    borderColor: C.text,
+                    maxHeight: "40px",
+                    color: "black",
+                  }}
+                >
+                  Atualizar cadastro
+                </Button>
+                <Button
+                  style={{
+                    flex: 1,
+                    background: C.orange,
+                    borderColor: C.white,
+                    maxHeight: "40px",
+                    color: "white",
+                  }}
+                  onClick={() => setOpenRegisterModal(true)}
+                >
+                  Cadastrar-me
+                </Button> */}
+              </div>
+            </div>
             <FilterGrid>
               <div>
                 <FieldLabel>Empreendimento</FieldLabel>
@@ -914,6 +1918,60 @@ export default function App() {
             )}
           </>
         </ResultsSection>
+
+        {/* add modal cadastro user */}
+        <Modal
+          title={
+            <span style={{ fontFamily: "'Sora',sans-serif" }}>
+              Cadastro Beneficiário
+            </span>
+          }
+          open={registerModal}
+          onCancel={() => setOpenRegisterModal(false)}
+          footer={null}
+          closeIcon={true}
+          width="75%"
+        >
+          <Divider />
+
+          <WrapperSteps style={{ marginTop: "20px" }}>
+            <div style={{ marginTop: "10px" }}>
+              <Steps
+                current={current}
+                style={{ marginBottom: 32 }}
+                items={steps.map((item) => ({ title: item.title }))}
+              />
+            </div>
+
+            <Form layout="vertical" form={form}>
+              {steps[current].content}
+              <div style={{ display: "flex" }}>
+                <div
+                  style={{
+                    marginTop: 24,
+                    display: "flex",
+                    gap: 8,
+                    marginLeft: "auto",
+                  }}
+                >
+                  {current > 0 && <Button onClick={prev}>Voltar</Button>}
+
+                  {current < steps.length - 1 && (
+                    <Button type="primary" onClick={next}>
+                      Próximo
+                    </Button>
+                  )}
+
+                  {current === steps.length - 1 && (
+                    <Button type="primary" onClick={handleSubmit}>
+                      Cadastrar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Form>
+          </WrapperSteps>
+        </Modal>
       </Page>
     </ConfigProvider>
   );
