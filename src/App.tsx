@@ -1068,6 +1068,7 @@ export default function App() {
   );
 
   const [registerModal, setOpenRegisterModal] = useState<boolean>(false);
+  const [updateModal, setOpenUpdateModal] = useState<boolean>(false);
   const [form] = Form.useForm();
   const [current, setCurrent] = useState(0);
   const [formData, setFormData] = useState<any>({});
@@ -1672,7 +1673,6 @@ export default function App() {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: "Bearer TOKEN_EXEMPLO",
             },
             body: JSON.stringify(payload),
           }
@@ -1718,6 +1718,198 @@ export default function App() {
     }
   };
 
+  const [userId, setUserId] = useState<string>("");
+
+  const handleSubmitPatch = async () => {
+    try {
+      const values = await form.validateFields();
+      await stepSchemas[current].validate(values, { abortEarly: false });
+
+      const payload = {
+        ...formData,
+        ...values,
+
+        cpf: formData!?.cpf!?.replace(/[^a-zA-Z0-9]/g, ""),
+        dataNascimento: moment(formData!?.dataNascimento, "DD/MM/YYYY").format(
+          "YYYY-MM-DD"
+        ),
+      };
+
+      try {
+        const res = await fetch(
+          `https://sga.startconsultorianet.com/public/beneficiarios/${userId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+
+        if (!res.ok) {
+          throw new Error("Erro ao enviar dados");
+        }
+
+        if (res.status === 200 || res.status === 201) {
+          form.resetFields();
+          setFormData({});
+          setCurrent(0);
+          setHash("");
+          setUserId("");
+          setOpenUpdateModal(false);
+          notification.success({
+            duration: 3,
+            message: "Sucesso!",
+            description: `Beneficiario atualizado.`,
+          });
+        }
+      } catch (error: any) {
+        notification.error({
+          duration: 1,
+          message: "Erro!",
+          description: `${error}`,
+        });
+      }
+    } catch (err: any) {
+      if (err.inner) {
+        const errors: any = {};
+        err.inner.forEach((e: any) => {
+          errors[e.path] = {
+            value: form.getFieldValue(e.path),
+            errors: [new Error(e.message)],
+          };
+        });
+        form.setFields(
+          Object.keys(errors).map((field) => ({
+            name: field,
+            errors: errors[field].errors,
+          }))
+        );
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (updateModal === false && hash) {
+      form.resetFields();
+      setFormData({});
+      setCurrent(0);
+      setHash("");
+      setUserId("");
+      setOpenUpdateModal(false);
+    }
+  }, [updateModal]);
+
+  const [hash, setHash] = useState<string>("");
+
+  async function sha256(text: string) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    return hashHex;
+  }
+
+  const handleSearch = async (value: string) => {
+    const hashedValue = await sha256(value);
+    setHash(hashedValue);
+  };
+
+  async function fetchUserData() {
+    if (hash !== null)
+      try {
+        const response = await fetch(
+          `https://sga.startconsultorianet.com//public/beneficiarios/cpf/${hash}`
+        );
+
+        const userData = await response.json();
+        setUserId(userData!?.id);
+        form.setFieldsValue({
+          idMunicipio: userData!?.idMunicipio,
+          cpf: maskCpf(userData!?.cpf),
+          nis: userData!?.nis,
+          nome: userData!?.nome,
+          rg: userData!?.rg,
+          orgao: userData!?.orgao,
+          estado: userData!?.estado,
+          dataNascimento: formatBirthDate(userData!?.dataNascimento),
+          estadoCivil: userData!?.estadoCivil,
+          sexo: userData!?.sexo,
+          email: userData!?.email,
+          telefone1: userData!?.telefone1,
+          telefone2: userData!?.telefone2,
+          mae: userData!?.mae,
+          rendaPessoal: userData!?.rendaPessoal,
+          profissao: userData!?.profissao,
+          emancipado: userData!?.emancipado,
+          chefeDeFamilia: userData!?.chefeDeFamilia,
+          possuiDeficiencia: userData!?.possuiDeficiencia,
+          deficiencia: userData!?.deficiencia,
+          totalPessoas: userData!?.totalPessoas,
+          rendaFamiliar: userData!?.rendaFamiliar,
+          condicaoMoradia: userData!?.condicaoMoradia,
+          recebemBolsaFamilia: userData!?.recebemBolsaFamilia,
+          deficientesNaFamilia: userData!?.deficientesNaFamilia,
+          idososNaFamilia: userData!?.idososNaFamilia,
+          tipoMoradia: userData!?.tipoMoradia,
+          trabalhoOcupacao: userData!?.trabalhoOcupacao,
+          filhos0a6Anos: userData!?.filhos0a6Anos,
+          filhos7a18Anos: userData!?.filhos7a18Anos,
+          cep: userData!?.cep,
+          logradouro: userData!?.logradouro,
+          numero: userData!?.numero,
+          bairro: userData!?.bairro,
+          cidade: userData!?.cidade,
+          complemento: userData!?.complemento,
+          localStatusInscricao: userData!?.localStatusInscricao,
+          cpfConjuge: userData!?.cpfConjuge,
+          nomeConjuge: userData!?.nomeConjuge,
+          estadoCivilConjuge: userData!?.estadoCivilConjuge,
+          profissaoConjuge: userData!?.profissaoConjuge,
+          rgConjuge: userData!?.rgConjuge,
+          rendaConjuge: userData!?.rendaConjuge,
+          possuiDeficienciaConjuge: userData!?.possuiDeficienciaConjuge,
+          conjugeVaraoAusente: userData!?.conjugeVaraoAusente,
+          mulherResponsavelUnidadeFamiliar:
+            userData!?.mulherResponsavelUnidadeFamiliar,
+          titularOuConjugeNegro: userData!?.titularOuConjugeNegro,
+          pessoaComDeficienciaNaComposicaoFamiliar:
+            userData!?.pessoaComDeficienciaNaComposicaoFamiliar,
+          idosoNaComposicaoFamiliar: userData!?.idosoNaComposicaoFamiliar,
+          criancaOuAdolescenteNaComposicaoFamiliar:
+            userData!?.criancaOuAdolescenteNaComposicaoFamiliar,
+          pessoaComCancerOuDoencaRaraCronicaDegenerativa:
+            userData!?.pessoaComCancerOuDoencaRaraCronicaDegenerativa,
+          mulherVitimaViolenciaDomestica:
+            userData!?.mulherVitimaViolenciaDomestica,
+          situacaoRiscoVulnerabilidade: userData!?.situacaoRiscoVulnerabilidade,
+          povosTradicionaisQuilombolas: userData!?.povosTradicionaisQuilombolas,
+          residentesEmAreasDeRisco: userData!?.residentesEmAreasDeRisco,
+          situacaoDeRuaOuTrajetoriaRua: userData!?.situacaoDeRuaOuTrajetoriaRua,
+        });
+
+        const values = form.getFieldsValue();
+        setFormData({ ...formData, ...values });
+
+        // setSorteio(dados);
+        // setResultado(resultado);
+        // setVagas(vagas);
+        // setLoading(false);
+      } catch (error) {}
+  }
+
+  useEffect(() => {
+    if (hash) fetchUserData();
+  }, [hash]);
+
   return (
     <ConfigProvider theme={antTheme}>
       <GlobalStyle />
@@ -1738,6 +1930,7 @@ export default function App() {
                   maxHeight: "40px",
                   color: "black",
                 }}
+                onClick={() => setOpenUpdateModal(true)}
               >
                 Atualizar cadastro
               </Button>
@@ -1971,6 +2164,71 @@ export default function App() {
               </div>
             </Form>
           </WrapperSteps>
+        </Modal>
+
+        {/* add atualização de  cadastro user */}
+        <Modal
+          title={
+            <span style={{ fontFamily: "'Sora',sans-serif" }}>
+              Atualização Beneficiário
+            </span>
+          }
+          open={updateModal}
+          onCancel={() => setOpenUpdateModal(false)}
+          footer={null}
+          closeIcon={true}
+          width="75%"
+        >
+          <Divider />
+
+          <Input.Search
+            placeholder="Informe o CPF do beneficiário"
+            enterButton
+            onSearch={handleSearch}
+            // style={{ width: 400 }}
+          />
+
+          {userId && (
+            <>
+              <WrapperSteps style={{ marginTop: "20px" }}>
+                <div style={{ marginTop: "10px" }}>
+                  <Steps
+                    current={current}
+                    style={{ marginBottom: 32 }}
+                    items={steps.map((item) => ({ title: item.title }))}
+                  />
+                </div>
+
+                <Form layout="vertical" form={form}>
+                  {steps[current].content}
+                  <div style={{ display: "flex" }}>
+                    <div
+                      style={{
+                        marginTop: 24,
+                        display: "flex",
+                        gap: 8,
+                        marginLeft: "auto",
+                      }}
+                    >
+                      {current > 0 && <Button onClick={prev}>Voltar</Button>}
+
+                      {current < steps.length - 1 && (
+                        <Button type="primary" onClick={next}>
+                          Próximo
+                        </Button>
+                      )}
+
+                      {current === steps.length - 1 && (
+                        <Button type="primary" onClick={handleSubmitPatch}>
+                          Atualizar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Form>
+              </WrapperSteps>
+            </>
+          )}
         </Modal>
       </Page>
     </ConfigProvider>
